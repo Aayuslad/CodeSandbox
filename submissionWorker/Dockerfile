@@ -1,0 +1,23 @@
+# Use the Docker-in-Docker image
+FROM docker:dind
+
+# Install Node.js and other dependencies
+RUN apk add --no-cache nodejs npm
+
+# Set the working directory in the container
+WORKDIR /app
+
+# Copy package.json and package-lock.json
+COPY package*.json ./
+
+# Install dependencies
+RUN npm install
+
+# Copy the rest of the application code
+COPY . .
+
+# Transpile TypeScript files
+RUN npm run build
+
+# Command to run the application
+CMD ["npm", "run", "start"]

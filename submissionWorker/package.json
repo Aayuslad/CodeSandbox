@@ -1,0 +1,22 @@
+{
+	"name": "submissionworker",
+	"version": "1.0.0",
+	"scripts": {
+		"build": "tsc",
+		"start": "node dist/index.js",
+		"dev": "concurrently \"tsc -w\" \"nodemon dist/index\""
+	},
+	"keywords": [],
+	"author": "",
+	"license": "ISC",
+	"description": "",
+	"dependencies": {
+		"concurrently": "^8.2.2",
+		"dotenv": "^16.4.5",
+		"redis": "^4.7.0",
+		"typescript": "^5.5.4"
+	},
+	"devDependencies": {
+		"@types/node": "^22.5.3"
+	}
+}

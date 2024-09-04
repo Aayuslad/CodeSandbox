@@ -1,0 +1,28 @@
+{
+	"name": "codesandbox",
+	"version": "1.0.0",
+	"main": "index.js",
+	"scripts": {
+		"build": "tsc",
+		"start": "node dist/index.js",
+		"dev": "nodemon --watch src --exec \"npm run build && node dist/index.js\""
+	},
+	"keywords": [],
+	"author": "",
+	"license": "ISC",
+	"description": "",
+	"devDependencies": {
+		"@types/bull": "^3.15.9",
+		"@types/express": "^4.17.21",
+		"@types/node": "^22.5.2"
+	},
+	"dependencies": {
+		"bull": "^4.16.1",
+		"dotenv": "^16.4.5",
+		"express": "^4.19.2",
+		"redis": "^4.7.0",
+		"typescript": "^5.5.4",
+		"wait-on": "^8.0.0",
+		"zod": "^3.23.8"
+	}
+}
