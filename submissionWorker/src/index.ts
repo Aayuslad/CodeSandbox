@@ -44,8 +44,10 @@ export async function processQueue() {
 					result = { status: "success", output: stdout };
 				}
 
-
+				console.log(`Setting result for job ${id}:`, result);
 				await redisClient.set(`result:${id}`, JSON.stringify(result));
+
+				await redisClient.lPush("executed-job-queue", JSON.stringify(result));
 			});
 
 			console.log("Executed");
