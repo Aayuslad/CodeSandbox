@@ -5,16 +5,16 @@ FROM docker:dind
 RUN apk add --no-cache nodejs npm
 
 # Set the working directory in the container
-WORKDIR /app
+WORKDIR /app/submissionWorker
 
 # Copy package.json and package-lock.json
-COPY package*.json ./
+COPY ./submissionWorker/package*.json ./
 
 # Install dependencies
 RUN npm install
 
 # Copy the rest of the application code
-COPY . .
+COPY ./submissionWorker/ ./
 
 # Transpile TypeScript files
 RUN npm run build

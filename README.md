@@ -18,37 +18,19 @@ This setup allows you to safely execute and manage code submissions using Docker
 
 ### Setup and Running
 
-1. **Create Docker Network**
+2. **Start the code sandbox**
 
-   Before starting the services, create a Docker network to allow containers to communicate with each other:
-
-   ```bash
-   docker network create code-sandbox-network
-   ```
-
-2. **Start Redis and Server**
-
-   Navigate to the `/server` directory and run the following command to start the server and Redis using Docker Compose:
+   Run the following command in the root diretory to start the server, 1 worker and Redis using Docker Compose:
 
    ```bash
-   cd /server
    docker-compose up --build
    ```
-3. **Start Worker**
-
-   Open a new terminal window, navigate to the /worker directory, and run the following command to start the worker service:
-
-   ```bash
-   cd /worker
-   docker-compose up --build
-   ```
-   This command builds and starts the worker container, which will connect to the Redis instance running in the /server container.
 
 ## API Endpoints
 
 ### Language List
 
-- ** Endpoint**: `GET /languages`
+- ** Endpoint**: `GET http://localhost:3000/languages`
 - **Description**: Retrieves a list of supported programming languages.
 - **Response**:
   ```json
@@ -59,7 +41,7 @@ This setup allows you to safely execute and manage code submissions using Docker
 
 ### Submit task
 
-- **Endpoint**: `POST /submit-task`
+- **Endpoint**: `POST http://localhost:3000/submit-task`
 - **Description**: Submits code for execution.
 - **Request Body**:
   ```json
@@ -71,41 +53,41 @@ This setup allows you to safely execute and manage code submissions using Docker
 - **Response**:
   ```json
   {
-  "taskId": "string"  // A unique job ID for tracking the execution.
+  "taskId": "string"  // A unique task ID for tracking the execution.
   }
   ```
 
 ### Check task Status
 
-- **Endpoint**: `GET /task-status/:id`
-- **Description**: Retrieves the status and result of a submitted job using its unique job ID.
+- **Endpoint**: `GET http://localhost:3000/task-status/:id`
+- **Description**: Retrieves the status and result of a submitted task using its unique task ID.
 - **Path Parameter**:
-  - `id`: The unique job ID (e.g., `1725424816302`).
+  - `id`: The unique task ID (e.g., `1725424816302`).
 - **Response**:
   - **Success (task Completed)**:
     ```json
     {
-      "status": "success or error",     // The status of the job.
+      "status": "success or error",     // The status of the task.
       "output": "string"       // The output from the executed code.
     }
     ```
   - **Pending**:
     ```json
     {
-      "status": "pending"  // The job is still being processed.
+      "status": "pending"  // The task is still being processed.
     }
     ```
   - **Error (task Not Found)**:
     ```json
     {
-      "error": "task not found"  // Indicates the job ID is not found or still pending.
+      "error": "task not found"  // Indicates the task ID is not found or still pending.
     }
     ```
 
 #### Example Request
 
 ```bash
-curl -X POST http://localhost:3000/submit \
+curl -X POST http://localhost:3000/submit-task \
 -H "Content-Type: application/json" \
 -d '{
   "languageId": 2,
