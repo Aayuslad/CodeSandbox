@@ -5,7 +5,7 @@
 	"scripts": {
 		"build": "tsc",
 		"start": "node dist/index.js",
-		"dev": "nodemon --watch src --exec \"npm run build && node dist/index.js\""
+		"dev": "concurrently \"tsc -w\" \"nodemon dist/index\""
 	},
 	"keywords": [],
 	"author": "",
@@ -17,11 +17,14 @@
 		"@types/node": "^22.5.2"
 	},
 	"dependencies": {
+		"@types/uuid": "^10.0.0",
 		"bull": "^4.16.1",
+		"concurrently": "^8.2.2",
 		"dotenv": "^16.4.5",
 		"express": "^4.19.2",
 		"redis": "^4.7.0",
 		"typescript": "^5.5.4",
+		"uuid": "^10.0.0",
 		"wait-on": "^8.0.0",
 		"zod": "^3.23.8"
 	}

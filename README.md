@@ -23,7 +23,7 @@ This setup allows you to safely execute and manage code submissions using Docker
    Before starting the services, create a Docker network to allow containers to communicate with each other:
 
    ```bash
-   docker network create codesandbox-network
+   docker network create code-sandbox-network
    ```
 
 2. **Start Redis and Server**
@@ -46,35 +46,46 @@ This setup allows you to safely execute and manage code submissions using Docker
 
 ## API Endpoints
 
-### Submit Code
+### Language List
 
-- **Endpoint**: `POST /submit`
+- ** Endpoint**: `GET /languages`
+- **Description**: Retrieves a list of supported programming languages.
+- **Response**:
+  ```json
+  {
+    [lanagueId as number]: "string"
+  }
+  ```
+
+### Submit task
+
+- **Endpoint**: `POST /submit-task`
 - **Description**: Submits code for execution.
 - **Request Body**:
   ```json
   {
-    "language": "cpp",   // The programming language of the code (e.g., cpp, python).
+    "languageId": 2,   // The programming language of the code (e.g., cpp, python).
     "code": "string",     // The source code to be executed.
     "input": "string"     // The input data for the code.
   }
 - **Response**:
   ```json
   {
-  "jobId": "string"  // A unique job ID for tracking the execution.
+  "taskId": "string"  // A unique job ID for tracking the execution.
   }
   ```
 
-### Check Job Status
+### Check task Status
 
-- **Endpoint**: `GET /status/:id`
+- **Endpoint**: `GET /task-status/:id`
 - **Description**: Retrieves the status and result of a submitted job using its unique job ID.
 - **Path Parameter**:
   - `id`: The unique job ID (e.g., `1725424816302`).
 - **Response**:
-  - **Success (Job Completed)**:
+  - **Success (task Completed)**:
     ```json
     {
-      "status": "success",     // The status of the job.
+      "status": "success or error",     // The status of the job.
       "output": "string"       // The output from the executed code.
     }
     ```
@@ -84,10 +95,10 @@ This setup allows you to safely execute and manage code submissions using Docker
       "status": "pending"  // The job is still being processed.
     }
     ```
-  - **Error (Job Not Found)**:
+  - **Error (task Not Found)**:
     ```json
     {
-      "error": "Job not found or pending"  // Indicates the job ID is not found or still pending.
+      "error": "task not found"  // Indicates the job ID is not found or still pending.
     }
     ```
 
@@ -97,8 +108,7 @@ This setup allows you to safely execute and manage code submissions using Docker
 curl -X POST http://localhost:3000/submit \
 -H "Content-Type: application/json" \
 -d '{
-  "language": "cpp",
-  "code": "#include <iostream> using namespace std; int main() { int a, b; cin >> a >> b; cout << a + b << endl; return 0; }",
-  "input": "3 5"
+  "languageId": 2,
+  "code": "#include <iostream>\nusing namespace std;\nint main() {\n    cout << \"Hello, World!\";   return 0;\n}"
 }'
 ```
