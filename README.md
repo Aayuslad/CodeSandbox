@@ -35,7 +35,10 @@ This setup allows you to safely execute and manage code submissions using Docker
 - **Response**:
   ```json
   {
-    [lanagueId as number]: "string"
+    1: "python 3.9",
+    2: "cpp gcc latest",
+    3: "java openjdk 17",
+    4: "c gcc latest"
   }
   ```
 
@@ -48,7 +51,6 @@ This setup allows you to safely execute and manage code submissions using Docker
   {
     "languageId": 2,   // The programming language of the code (e.g., cpp, python).
     "code": "string",     // The source code to be executed.
-    "input": "string"     // The input data for the code.
   }
 - **Response**:
   ```json
