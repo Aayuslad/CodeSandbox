@@ -1,29 +1,20 @@
-import express from "express";
 import { connectRedis } from "./database/redisClient";
-import { batchTaskQueueProcessor } from "./workers/batchTaskQueueProcessor";
-import { taskProcessQueue } from "./workers/taskQueueProcessor";
-
+import { batchTaskQueueProcessor } from "./controller/batchTaskQueueProcessor";
+import express from "express";
+const app = express();
 const PORT = 3001;
 
 (async function () {
 	try {
 		await connectRedis();
 		console.log("Redis connected");
-
-		const app = express();
-
-		// can not ruth this bcz EC2 has only 1 cpu
-
-		// await taskProcessQueue();
-		// console.log("Task Worker started");
-
-		await batchTaskQueueProcessor();
-		console.log("Batch Task Worker started");
+		batchTaskQueueProcessor();
+		console.log("Queue processor started");
 
 		app.listen(PORT, () => {
-			console.log(`Server handling requests on port ${PORT}`);
+			console.log("Worker started on port", PORT);
 		});
 	} catch (error) {
-		console.log("Error initializing server:", error);
+		console.log("Error initializing worker:", error);
 	}
 })();

@@ -9,6 +9,8 @@ const execPromise = promisify(exec);
 
 export async function batchTaskQueueProcessor() {
 	while (redisClient.isOpen) {
+		console.log("inside batchTaskQueueProcessor");
+	
 		const batchTask = await redisClient.blPop("batch-task-execution-queue", 0);
 		if (!batchTask) continue;
 		const parcedBatchTask = JSON.parse(batchTask.element);
