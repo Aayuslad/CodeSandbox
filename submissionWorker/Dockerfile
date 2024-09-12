@@ -16,6 +16,9 @@ RUN npm install
 # Copy the rest of the application code
 COPY ./submissionWorker/ ./
 
+# expose port 3001
+EXPOSE 3001
+
 # Transpile TypeScript files
 RUN npm run build
 
