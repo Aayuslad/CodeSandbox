@@ -50,7 +50,7 @@ This setup allows you to safely execute and manage code submissions using Docker
   ```json
   {
     "languageId": 2,   // The programming language of the code (e.g., cpp, python).
-    "code": "string",     // The source code to be executed.
+    "code": "base 64 encoded code string",     // The source code to be executed.
   }
 - **Response**:
   ```json
