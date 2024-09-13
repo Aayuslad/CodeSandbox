@@ -13,7 +13,7 @@ export async function batchTaskQueueProcessor() {
 		if (!batchTask) continue;
 		const parcedBatchTask = JSON.parse(batchTask.element);
 
-		console.log("batch task received:", parcedBatchTask);
+		console.log("batch task received:", parcedBatchTask.id);
 
 		const parced = BatchSubmissionSchema.safeParse(parcedBatchTask);
 		if (!parced.success) {
@@ -23,49 +23,50 @@ export async function batchTaskQueueProcessor() {
 
 		const { id, submissionId, languageId, callbackUrl, tasks } = parced.data;
 
-		const results = await Promise.all(
-			tasks.map(async (task) => {
-				const command = dockerCommands[languageId]?.replace(/_CODE/, task.code);
-				if (!command) {
-					console.error(`No command found for language ID ${languageId}`);
-					await redisClient.set(
-						`batchResult:${id}`,
-						JSON.stringify({ status: "error", output: "languageId not found" }),
-					);
-					return false;
-				}
+		let allTasksAccepted = true;
 
-				try {
-					const { stdout, stderr } = await execPromise(command);
+		for (const task of tasks) {
+			const command = dockerCommands[languageId]?.replace(/_CODE/, task.code);
+			if (!command) {
+				console.error(`No command found for language ID ${languageId}`);
+				await redisClient.set(
+					`batchResult:${id}`,
+					JSON.stringify({ status: "error", output: "languageId not found" }),
+				);
+				allTasksAccepted = false;
+				break;
+			}
 
-					console.log("output : ", stdout, stderr);
+			try {
+				const { stdout, stderr } = await execPromise(command);
 
-					const existingResult = await redisClient.get(`batchResult:${id}`);
-					let batchResult = existingResult ? JSON.parse(existingResult) : { tasks: [] };
+				console.log("output : ", stdout, stderr);
 
-					if (stderr) {
-						batchResult.tasks.push({ id: task.id, status: "error", output: stderr, accepted: false });
-						await redisClient.set(`batchResult:${id}`, JSON.stringify(batchResult));
-						return false;
-					} else {
-						const accepted = stdout == task.expectedOutput;
-						batchResult.tasks.push({ id: task.id, status: "success", output: stdout, accepted });
-						await redisClient.set(`batchResult:${id}`, JSON.stringify(batchResult));
-						return accepted;
-					}
-				} catch (error) {
-					//@ts-ignore
-					const errorOutput = error.stderr || error.message;
-					const existingResult = await redisClient.get(`batchResult:${id}`);
-					let batchResult = existingResult ? JSON.parse(existingResult) : { tasks: [] };
-					batchResult.tasks.push({ id: task.id, status: "error", output: errorOutput, accepted: false });
+				const existingResult = await redisClient.get(`batchResult:${id}`);
+				let batchResult = existingResult ? JSON.parse(existingResult) : { tasks: [] };
+
+				if (stderr) {
+					batchResult.tasks.push({ id: task.id, status: "error", output: stderr, accepted: false });
 					await redisClient.set(`batchResult:${id}`, JSON.stringify(batchResult));
-					return false;
+					allTasksAccepted = false;
+				} else {
+					const accepted = stdout == task.expectedOutput;
+					batchResult.tasks.push({ id: task.id, status: "success", output: stdout, accepted });
+					await redisClient.set(`batchResult:${id}`, JSON.stringify(batchResult));
+					if (!accepted) {
+						allTasksAccepted = false;
+					}
 				}
-			}),
-		);
-
-		const allTasksAccepted = results.every((result) => result === true);
+			} catch (error) {
+				//@ts-ignore
+				const errorOutput = error.stderr || error.message;
+				const existingResult = await redisClient.get(`batchResult:${id}`);
+				let batchResult = existingResult ? JSON.parse(existingResult) : { tasks: [] };
+				batchResult.tasks.push({ id: task.id, status: "error", output: errorOutput, accepted: false });
+				await redisClient.set(`batchResult:${id}`, JSON.stringify(batchResult));
+				allTasksAccepted = false;
+			}
+		}
 
 		if (callbackUrl) {
 			await axios.post(callbackUrl, {
