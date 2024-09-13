@@ -9,11 +9,11 @@ const execPromise = promisify(exec);
 
 export async function batchTaskQueueProcessor() {
 	while (redisClient.isOpen) {
-		console.log("inside batchTaskQueueProcessor");
-	
 		const batchTask = await redisClient.blPop("batch-task-execution-queue", 0);
 		if (!batchTask) continue;
 		const parcedBatchTask = JSON.parse(batchTask.element);
+
+		console.log("batch task received:", parcedBatchTask);
 
 		const parced = BatchSubmissionSchema.safeParse(parcedBatchTask);
 		if (!parced.success) {
@@ -37,6 +37,8 @@ export async function batchTaskQueueProcessor() {
 
 				try {
 					const { stdout, stderr } = await execPromise(command);
+
+					console.log("output : ", stdout, stderr);
 
 					const existingResult = await redisClient.get(`batchResult:${id}`);
 					let batchResult = existingResult ? JSON.parse(existingResult) : { tasks: [] };

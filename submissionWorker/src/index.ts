@@ -7,10 +7,8 @@ const PORT = 3001;
 (async function () {
 	try {
 		await connectRedis();
-		console.log("Redis connected");
 		batchTaskQueueProcessor();
 		console.log("Queue processor started");
-
 		app.listen(PORT, () => {
 			console.log("Worker started on port", PORT);
 		});
