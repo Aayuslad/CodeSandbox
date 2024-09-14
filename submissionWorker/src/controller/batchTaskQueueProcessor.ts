@@ -11,7 +11,7 @@ export async function batchTaskQueueProcessor() {
 	while (redisClient.isOpen) {
 		const batchTask = await redisClient.blPop("batch-task-execution-queue", 0);
 		if (!batchTask) continue;
-		const parcedBatchTask = JSON.parse(batchTask.element);
+		const parcedBatchTask: BatchSubmissionSchema = JSON.parse(batchTask.element);
 
 		console.log("batch task received:", parcedBatchTask.id);
 
@@ -29,10 +29,7 @@ export async function batchTaskQueueProcessor() {
 			const command = dockerCommands[languageId]?.replace(/_CODE/, task.code);
 			if (!command) {
 				console.error(`No command found for language ID ${languageId}`);
-				await redisClient.set(
-					`batchResult:${id}`,
-					JSON.stringify({ status: "error", output: "languageId not found" }),
-				);
+				await redisClient.set(`batchResult:${id}`, JSON.stringify({ status: "error", output: "languageId not found" }));
 				allTasksAccepted = false;
 				break;
 			}
@@ -43,15 +40,29 @@ export async function batchTaskQueueProcessor() {
 				console.log("output : ", stdout, stderr);
 
 				const existingResult = await redisClient.get(`batchResult:${id}`);
-				let batchResult = existingResult ? JSON.parse(existingResult) : { tasks: [] };
+				let batchResult = existingResult ? JSON.parse(existingResult) : { status: "executing", tasks: [] };
 
 				if (stderr) {
-					batchResult.tasks.push({ id: task.id, status: "error", output: stderr, accepted: false });
+					batchResult.tasks.push({
+						id: task.id,
+						status: "error",
+						output: stderr,
+						accepted: false,
+						inputs: task.inputs,
+						expectedOutput: task.expectedOutput,
+					});
 					await redisClient.set(`batchResult:${id}`, JSON.stringify(batchResult));
 					allTasksAccepted = false;
 				} else {
 					const accepted = stdout == task.expectedOutput;
-					batchResult.tasks.push({ id: task.id, status: "success", output: stdout, accepted });
+					batchResult.tasks.push({
+						id: task.id,
+						status: "success",
+						output: stdout,
+						accepted,
+						inputs: task.inputs,
+						expectedOutput: task.expectedOutput,
+					});
 					await redisClient.set(`batchResult:${id}`, JSON.stringify(batchResult));
 					if (!accepted) {
 						allTasksAccepted = false;
@@ -62,10 +73,25 @@ export async function batchTaskQueueProcessor() {
 				const errorOutput = error.stderr || error.message;
 				const existingResult = await redisClient.get(`batchResult:${id}`);
 				let batchResult = existingResult ? JSON.parse(existingResult) : { tasks: [] };
-				batchResult.tasks.push({ id: task.id, status: "error", output: errorOutput, accepted: false });
+				batchResult.tasks.push({
+					id: task.id,
+					status: "error",
+					output: errorOutput,
+					accepted: false,
+					inputs: task.inputs,
+					expectedOutput: task.expectedOutput,
+				});
 				await redisClient.set(`batchResult:${id}`, JSON.stringify(batchResult));
 				allTasksAccepted = false;
 			}
+		}
+
+		const existingResult = await redisClient.get(`batchResult:${id}`);
+		const parcedExstingResult = JSON.parse(existingResult as string);
+		if (allTasksAccepted) {
+			await redisClient.set(`batchResult:${id}`, JSON.stringify({ status: "accepted", tasks: parcedExstingResult.tasks }));
+		} else {
+			await redisClient.set(`batchResult:${id}`, JSON.stringify({ status: "rejected", tasks: parcedExstingResult.tasks }));
 		}
 
 		if (callbackUrl) {

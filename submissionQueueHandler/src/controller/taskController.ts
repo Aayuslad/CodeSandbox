@@ -95,7 +95,7 @@ export async function getBatchTaskStatus(req: Request, res: Response) {
 
 		const result = await redisClient.get(`batchResult:${batchTaskId}`);
 		if (result) {
-			return res.json({ status: "completed", result: JSON.parse(result) });
+			return res.json(JSON.parse(result));
 		}
 
 		const tasks = (await redisClient.lRange("batch-task-execution-queue", 0, -1)).map((task) => JSON.parse(task));
@@ -104,7 +104,7 @@ export async function getBatchTaskStatus(req: Request, res: Response) {
 			return res.json({ status: "pending" });
 		}
 
-		return res.status(404).json({ error: "Task not found" });
+		return res.status(200).json({ status: "notFound" });
 	} catch (error) {
 		console.log("Error during getting a batch task status:", error);
 		return res.status(500).json({ error: "Failed to get batch task status" });
