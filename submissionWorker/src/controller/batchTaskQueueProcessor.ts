@@ -35,7 +35,11 @@ export async function batchTaskQueueProcessor() {
 			}
 
 			try {
+				const startedAt = Date.now();
 				const { stdout, stderr } = await execPromise(command);
+				const ededAt = Date.now();
+
+				console.log("time taken to execute command for one test case : ", ededAt - startedAt);
 
 				console.log("output : ", stdout, stderr);
 
