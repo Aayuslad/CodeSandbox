@@ -43,7 +43,7 @@ export async function submitTask(req: Request, res: Response) {
 	}
 }
 
-export async function submitBatchTask(req: Request, res: Response) {
+export async function Old_submitBatchTask(req: Request, res: Response) {
 	try {
 		const parsed = BatchSubmissionSchema.safeParse(req.body);
 		if (!parsed.success) {
@@ -66,6 +66,31 @@ export async function submitBatchTask(req: Request, res: Response) {
 		return res.status(500).json({ error: "Failed to add task to the queue" });
 	}
 }
+
+export async function submitBatchTask(req: Request, res: Response) {
+	try {
+		const parsed = BatchSubmissionSchema.safeParse(req.body);
+		if (!parsed.success) {
+			return res.status(400).json({ error: "Invalid request body" });
+		}
+
+		const { submissionId, languageId, code, callbackUrl, tasks } = parsed.data;
+		const id = uuidv4();
+
+		await redisClient.rPush(
+			"batch-task-execution-queue",
+			JSON.stringify({ id, submissionId, languageId, code, callbackUrl, tasks }),
+		);
+
+		console.log("Batch task added to the queue:", id);
+
+		return res.json({ batchTaskId: id });
+	} catch (error) {
+		console.log("Error during adding a task to the queue:", error);
+		return res.status(500).json({ error: "Failed to add task to the queue" });
+	}
+}
+
 
 export async function getTaskStatus(req: Request, res: Response) {
 	try {

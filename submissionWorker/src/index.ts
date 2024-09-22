@@ -1,6 +1,6 @@
 import { connectRedis } from "./database/redisClient";
 // import { batchTaskQueueProcessor } from "./controller/batchTaskQueueProcessor";
-import { batchTaskQueueProcessor } from "./controller/2_batchTaskQueueProcessor";
+import { batchTaskQueueProcessor } from "./controller/3_batchTaskQueueProcessor";
 import express from "express";
 const app = express();
 const PORT = 3001;

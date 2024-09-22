@@ -10,14 +10,15 @@ export const taskSchema = zod.object({
 
 export const batchTaskSchema = zod.object({
 	id: zod.number(),
-	code: zod.string(),
+	stdin: zod.string().base64(),
 	inputs: zod.string().optional(),
 	expectedOutput: zod.string().optional(),
 });
 
 export const BatchSubmissionSchema = zod.object({
 	submissionId: zod.string(),
-	callbackUrl: zod.string().optional(),
 	languageId: zod.number(),
+	code: zod.string().base64(),
+	callbackUrl: zod.string().optional(),
 	tasks: zod.array(batchTaskSchema),
 });
