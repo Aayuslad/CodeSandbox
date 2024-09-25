@@ -1,5 +1,8 @@
 export type InitializeContainersFunction = () => Promise<void>;
-export type CompileInContainerFunction = (languageId: number, code: string) => Promise<{ containerId: string; compileStatus: string }>;
+export type CompileInContainerFunction = (
+	languageId: number,
+	code: string,
+) => Promise<{ containerId: string; compileStatus: string; compilationError?: string }>;
 export type ExecuteCompiledCode = (
 	id: string,
 	languageId: number,

@@ -91,7 +91,6 @@ export async function submitBatchTask(req: Request, res: Response) {
 	}
 }
 
-
 export async function getTaskStatus(req: Request, res: Response) {
 	try {
 		const taskId = req.params.id;
@@ -124,7 +123,7 @@ export async function getBatchTaskStatus(req: Request, res: Response) {
 		}
 
 		const tasks = (await redisClient.lRange("batch-task-execution-queue", 0, -1)).map((task) => JSON.parse(task));
-		const task = tasks.find((task) => task.batchTaskId === batchTaskId);
+		const task = tasks.find((task) => task.id === batchTaskId);
 		if (task) {
 			return res.json({ status: "pending" });
 		}

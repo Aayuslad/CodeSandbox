@@ -63,8 +63,9 @@ const compileInContainer: CompileInContainerFunction = async (languageId, code) 
 		console.log(`Compilation time: ${end - start}ms`);
 		return { containerId, compileStatus: "compiled successfully" };
 	} catch (error) {
-		console.error("Error compiling code:", error);
-		return { containerId: "", compileStatus: "compilation error" };
+		console.log("Error compiling code:", error);
+		//@ts-ignore
+		return { containerId: "", compileStatus: "compilation error", compilationError: extractError(error.stderr) };
 	}
 };
 
@@ -139,9 +140,9 @@ export const batchTaskQueueProcessor: BatchTaskQueueProcessorFunction = async ()
 		try {
 			await updateBatchResult(id, "executing");
 
-			const { containerId, compileStatus } = await compileInContainer(languageId, code);
+			const { containerId, compileStatus, compilationError } = await compileInContainer(languageId, code);
 			if (compileStatus === "compilation error") {
-				await updateBatchResult(id, "compilation error");
+				await updateBatchResult(id, "compilation error", [], compilationError);
 				continue;
 			}
 
@@ -177,7 +178,6 @@ export const batchTaskQueueProcessor: BatchTaskQueueProcessorFunction = async ()
 	}
 };
 
-
 // ######## utils ########
 
 const sendCallback = async (callbackUrl: string, submissionId: string, accepted: boolean) => {
@@ -188,6 +188,19 @@ const sendCallback = async (callbackUrl: string, submissionId: string, accepted:
 	}
 };
 
-const updateBatchResult = async (id: string, status: string, tasks: any[] = []) => {
-	await redisClient.set(`batchResult:${id}`, JSON.stringify({ status, tasks }));
+const updateBatchResult = async (id: string, status: string, tasks: any[] = [], compilationError: string = "") => {
+	await redisClient.set(`batchResult:${id}`, JSON.stringify({ status, tasks, compilationError }));
+};
+
+const extractError = (log: string) => {
+	// Split log into lines
+	const lines = log.split("\n");
+
+	// Filter and extract lines that contain "error:"
+	const errorMessage = lines
+		.filter((line) => line.includes("error:"))
+		.map((line) => line.split("error:")[1].trim()) // Extract only the part after "error:"
+		.join("\n");
+
+	return errorMessage;
 };
