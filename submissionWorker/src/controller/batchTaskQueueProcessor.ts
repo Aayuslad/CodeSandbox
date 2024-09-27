@@ -45,7 +45,7 @@ const compileInContainer: CompileInContainerFunction = async (languageId, code) 
 	if (!containerId) throw new Error(`No container found for language ID ${languageId}`);
 
 	const compileCommands: Record<number, string> = {
-		1: `docker exec -i ${containerId} sh -c 'echo "${code}" | base64 -d > Solution.py && python -m py_compile Solution.py'`,
+		1: `docker exec -i ${containerId} sh -c 'echo "${code}" | base64 -d > Solution.py && python -m py_compile Solution.py && mv Solution.py myapp'`,
 		2: `docker exec -i ${containerId} sh -c 'echo "${code}" | base64 -d > Solution.cpp && g++ Solution.cpp -o myapp'`,
 		3: `docker exec -i ${containerId} sh -c 'echo "${code}" | base64 -d > Solution.java && javac Solution.java'`,
 		4: `docker exec -i ${containerId} sh -c 'echo "${code}" | base64 -d > Solution.c && gcc Solution.c -o myapp'`,
@@ -69,7 +69,7 @@ const compileInContainer: CompileInContainerFunction = async (languageId, code) 
 
 const executeCompiledCode: ExecuteCompiledCode = async (id, languageId, containerId, inputs, tasks) => {
 	const executeCommands: Record<number, (input: string) => string> = {
-		1: (input: string) => `echo "${input}" | base64 -d | docker exec -i ${containerId} python Solution.py`,
+		1: (input: string) => `echo "${input}" | base64 -d | docker exec -i ${containerId} python myapp`,
 		2: (input: string) => `echo "${input}" | base64 -d | docker exec -i ${containerId} ./myapp`,
 		3: (input: string) => `echo "${input}" | base64 -d | docker exec -i ${containerId} java Solution`,
 		4: (input: string) => `echo "${input}" | base64 -d | docker exec -i ${containerId} ./myapp`,
@@ -90,7 +90,7 @@ const executeCompiledCode: ExecuteCompiledCode = async (id, languageId, containe
 		try {
 			const command = executeCommand(input);
 			const start = Date.now();
-			const { stdout, stderr } = await execWithTimeout(command);
+			const { stdout, stderr } = await execWithTimeout(command, containerId, languageId);
 			const end = Date.now();
 			console.log("Execution time:", end - start + "ms");
 
@@ -134,6 +134,7 @@ const executeCompiledCode: ExecuteCompiledCode = async (id, languageId, containe
 
 	return { allTasksAccepted, executionStatus: "completed" };
 };
+
 export const batchTaskQueueProcessor: BatchTaskQueueProcessorFunction = async () => {
 	await initializeContainers();
 
@@ -192,12 +193,18 @@ export const batchTaskQueueProcessor: BatchTaskQueueProcessorFunction = async ()
 
 const execPromise = promisify(exec);
 
-async function execWithTimeout(command: string, timeout = 1000): Promise<{ stdout: string; stderr: string }> {
+async function execWithTimeout(
+	command: string,
+	containerId: string,
+	languageId: number,
+	timeout = 1000,
+): Promise<{ stdout: string; stderr: string }> {
 	return new Promise((resolve, reject) => {
 		const childProcess = spawn(command, { shell: true });
 
 		let stdout = "";
 		let stderr = "";
+		let timedOut = false;
 
 		childProcess.stdout.on("data", (data) => {
 			stdout += data.toString();
@@ -208,6 +215,8 @@ async function execWithTimeout(command: string, timeout = 1000): Promise<{ stdou
 		});
 
 		childProcess.on("close", (code) => {
+			if (timedOut) return;
+			clearTimeout(timer);
 			if (code !== 0) {
 				reject(new Error(`Process exited with code ${code}`));
 			} else {
@@ -215,12 +224,21 @@ async function execWithTimeout(command: string, timeout = 1000): Promise<{ stdou
 			}
 		});
 
+		// Set a timeout to kill the process if it runs longer than the specified time
 		const timer = setTimeout(() => {
-			childProcess.kill("SIGKILL");
-			reject(new Error("time limit exceeded"));
+			timedOut = true;
+
+			const killProcess = spawn(`docker exec ${containerId} pkill -f ${languageId === 3 ? "java" : "myapp"}`, {
+				shell: true,
+			});
+
+			killProcess.on("close", () => {
+				reject(new Error("time limit exceeded"));
+			});
 		}, timeout);
 
 		childProcess.on("exit", () => {
+			if (timedOut) return;
 			clearTimeout(timer);
 		});
 	});
@@ -250,13 +268,11 @@ const updateBatchResult = async (id: string, status: string, tasks: any[] = [], 
 };
 
 const extractError = (log: string) => {
-	// Split log into lines
 	const lines = log.split("\n");
 
-	// Filter and extract lines that contain "error:"
 	const errorMessage = lines
 		.filter((line) => line.includes("error:"))
-		.map((line) => line.split("error:")[1].trim()) // Extract only the part after "error:"
+		.map((line) => line.split("error:")[1].trim())
 		.join("\n");
 
 	return errorMessage;
