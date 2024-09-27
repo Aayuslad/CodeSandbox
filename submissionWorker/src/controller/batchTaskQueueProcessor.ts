@@ -1,16 +1,14 @@
-import { redisClient } from "../database/redisClient";
-import { exec } from "child_process";
-import { promisify } from "util";
-import { BatchResult, BatchSubmissionSchema } from "../types/zodSchemas";
 import axios from "axios";
+import { exec, spawn } from "child_process";
+import { promisify } from "util";
+import { redisClient } from "../database/redisClient";
 import {
 	BatchTaskQueueProcessorFunction,
 	CompileInContainerFunction,
 	ExecuteCompiledCode,
 	InitializeContainersFunction,
 } from "../types/controllerFunctionTypes";
-
-const execPromise = promisify(exec);
+import { BatchResult, BatchSubmissionSchema } from "../types/zodSchemas";
 
 const containerPool: Record<number, string> = {
 	1: "", // Python
@@ -22,9 +20,9 @@ const containerPool: Record<number, string> = {
 const initializeContainers: InitializeContainersFunction = async () => {
 	try {
 		const containerConfigs = [
-			{ id: 1, image: "python:3.9" },
+			{ id: 1, image: "python:3.9-alpine" },
 			{ id: 2, image: "gcc:latest" },
-			{ id: 3, image: "openjdk:latest" },
+			{ id: 3, image: "openjdk:11-slim" },
 			{ id: 4, image: "gcc:latest" },
 		];
 
@@ -92,7 +90,7 @@ const executeCompiledCode: ExecuteCompiledCode = async (id, languageId, containe
 		try {
 			const command = executeCommand(input);
 			const start = Date.now();
-			const { stdout, stderr } = await execPromise(command);
+			const { stdout, stderr } = await execWithTimeout(command);
 			const end = Date.now();
 			console.log("Execution time:", end - start + "ms");
 
@@ -114,16 +112,28 @@ const executeCompiledCode: ExecuteCompiledCode = async (id, languageId, containe
 			}
 		} catch (error) {
 			console.error("Runtime error:", error);
-			batchResult.status = "run time error";
-			batchResult.tasks = [];
-			await redisClient.set(`batchResult:${id}`, JSON.stringify(batchResult));
+
+			//@ts-ignore
+			if (error.message == "time limit exceeded") {
+				const taskResult = {
+					id: tasks[index].id,
+					status: "error",
+					output: "",
+					accepted: false,
+					inputs: tasks[index].inputs || "",
+					expectedOutput: tasks[index].expectedOutput,
+				};
+				batchResult.tasks.push(taskResult);
+				await redisClient.set(`batchResult:${id}`, JSON.stringify(batchResult));
+				return { allTasksAccepted: false, executionStatus: "time limit exceeded" };
+			}
+
 			return { allTasksAccepted: false, executionStatus: "run time error" };
 		}
 	}
 
 	return { allTasksAccepted, executionStatus: "completed" };
 };
-
 export const batchTaskQueueProcessor: BatchTaskQueueProcessorFunction = async () => {
 	await initializeContainers();
 
@@ -154,8 +164,8 @@ export const batchTaskQueueProcessor: BatchTaskQueueProcessorFunction = async ()
 				tasks,
 			);
 
-			if (executionStatus === "run time error") {
-				await updateBatchResult(id, "run time error");
+			if (executionStatus !== "completed") {
+				await updateBatchResult(id, executionStatus);
 				continue;
 			}
 
@@ -180,6 +190,42 @@ export const batchTaskQueueProcessor: BatchTaskQueueProcessorFunction = async ()
 
 // ######## utils ########
 
+const execPromise = promisify(exec);
+
+async function execWithTimeout(command: string, timeout = 1000): Promise<{ stdout: string; stderr: string }> {
+	return new Promise((resolve, reject) => {
+		const childProcess = spawn(command, { shell: true });
+
+		let stdout = "";
+		let stderr = "";
+
+		childProcess.stdout.on("data", (data) => {
+			stdout += data.toString();
+		});
+
+		childProcess.stderr.on("data", (data) => {
+			stderr += data.toString();
+		});
+
+		childProcess.on("close", (code) => {
+			if (code !== 0) {
+				reject(new Error(`Process exited with code ${code}`));
+			} else {
+				resolve({ stdout, stderr });
+			}
+		});
+
+		const timer = setTimeout(() => {
+			childProcess.kill("SIGKILL");
+			reject(new Error("time limit exceeded"));
+		}, timeout);
+
+		childProcess.on("exit", () => {
+			clearTimeout(timer);
+		});
+	});
+}
+
 const sendCallback = async (callbackUrl: string, submissionId: string, accepted: boolean) => {
 	try {
 		await axios.post(callbackUrl, { submissionId, accepted });
@@ -188,8 +234,19 @@ const sendCallback = async (callbackUrl: string, submissionId: string, accepted:
 	}
 };
 
-const updateBatchResult = async (id: string, status: string, tasks: any[] = [], compilationError: string = "") => {
-	await redisClient.set(`batchResult:${id}`, JSON.stringify({ status, tasks, compilationError }));
+const updateBatchResult = async (id: string, status: string, tasks: any[] = [], compilationError: string = ""): Promise<void> => {
+	const key = `batchResult:${id}`;
+	const result = { status, tasks, compilationError };
+
+	if (tasks.length === 0) {
+		const existingResult = await redisClient.get(key);
+		if (existingResult) {
+			const parsedResult = JSON.parse(existingResult);
+			result.tasks = parsedResult.tasks || [];
+		}
+	}
+
+	await redisClient.set(key, JSON.stringify(result));
 };
 
 const extractError = (log: string) => {
