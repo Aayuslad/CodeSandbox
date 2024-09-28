@@ -2,11 +2,13 @@ import express from "express";
 import "dotenv/config";
 import redisClient from "./database/redisClient";
 import router from "./routes/route";
+import bodyParser from "body-parser";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
+app.use(bodyParser.json({ limit: "50mb" }));
 
 app.get("/", (req, res) => {
 	return res.json({ message: "Code Sandbox is up and running 🔥" });
