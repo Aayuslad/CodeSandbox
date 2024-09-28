@@ -7,8 +7,8 @@ import bodyParser from "body-parser";
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(express.json());
 app.use(bodyParser.json({ limit: "50mb" }));
+app.use(express.json());
 
 app.get("/", (req, res) => {
 	return res.json({ message: "Code Sandbox is up and running 🔥" });
