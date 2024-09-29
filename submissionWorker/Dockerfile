@@ -5,8 +5,7 @@ FROM docker:dind
 RUN apk add --no-cache nodejs npm
 
 # Increase ARG_MAX and ulimit for large command handling
-RUN ulimit -n 8192 && ulimit -s 32768
-RUN getconf ARG_MAX 6291456
+RUN ulimit -n 81920 && ulimit -s 327680
 
 # Set the working directory in the container
 WORKDIR /app/submissionWorker
