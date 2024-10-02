@@ -10,7 +10,7 @@ export const taskSchema = zod.object({
 
 export const batchTaskSchema = zod.object({
 	id: zod.number(),
-	stdin: zod.string().base64(),
+	stdin: zod.string(),
 	inputs: zod.string().optional(),
 	expectedOutput: zod.string().optional(),
 });

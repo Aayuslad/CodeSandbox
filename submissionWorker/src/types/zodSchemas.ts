@@ -9,25 +9,9 @@ export const taskSchema = zod.object({
 	callbackUrl: zod.string().optional(),
 });
 
-export const Old_batchTaskSchema = zod.object({
-	id: zod.number(),
-	code: zod.string(),
-	inputs: zod.string().optional(),
-	expectedOutput: zod.string().optional(),
-});
-
-export const Old_BatchSubmissionSchema = zod.object({
-	id: zod.string(),
-	submissionId: zod.string(),
-	languageId: zod.number(),
-	callbackUrl: zod.string().optional(),
-	tasks: zod.array(Old_batchTaskSchema),
-});
-export type Old_BatchSubmissionSchema = zod.infer<typeof BatchSubmissionSchema>;
-
 export const batchTaskSchema = zod.object({
 	id: zod.number(),
-	stdin: zod.string().base64(),
+	stdin: zod.string(),
 	inputs: zod.string().optional(),
 	expectedOutput: zod.string().optional(),
 });
