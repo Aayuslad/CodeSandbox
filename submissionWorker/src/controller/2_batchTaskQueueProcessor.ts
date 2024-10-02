@@ -20,7 +20,7 @@ const containerPool: Record<number, string> = {
 const initializeContainers: InitializeContainersFunction = async () => {
 	try {
 		const containerConfigs = [
-			{ id: 1, image: "python:3.9-alpine", installCommand: "apk add bash" }, 
+			{ id: 1, image: "python:3.9-alpine", installCommand: "apk add bash" },
 			{ id: 2, image: "gcc:latest", installCommand: "apt-get update && apt-get install -y time" },
 			{ id: 3, image: "openjdk:11-slim", installCommand: "apt-get update && apt-get install -y time" },
 			{ id: 4, image: "gcc:latest", installCommand: "apt-get update && apt-get install -y time" },
@@ -105,7 +105,7 @@ const executeCompiledCode: ExecuteCompiledCode = async (id, languageId, containe
 				accepted: stderr == "" && stdout.trim() === tasks[index].expectedOutput,
 				inputs: tasks[index].inputs || "",
 				expectedOutput: tasks[index].expectedOutput,
-				executionTime: executionTime * 1000,
+				executionTime: Math.floor(executionTime * 1000),
 			};
 
 			batchResult.tasks.push(taskResult);
@@ -158,6 +158,7 @@ export const batchTaskQueueProcessor: BatchTaskQueueProcessorFunction = async ()
 			const { containerId, compileStatus, compilationError } = await compileInContainer(languageId, code);
 			if (compileStatus === "compilation error") {
 				await updateBatchResult(id, "compilation error", [], compilationError);
+				if (callbackUrl) await sendCallback(callbackUrl, submissionId, "Compilation Error");
 				continue;
 			}
 
@@ -171,6 +172,13 @@ export const batchTaskQueueProcessor: BatchTaskQueueProcessorFunction = async ()
 
 			if (executionStatus !== "completed") {
 				await updateBatchResult(id, executionStatus);
+				if (callbackUrl) {
+					if (executionStatus === "time limit exceeded") {
+						await sendCallback(callbackUrl, submissionId, "Time Limit Exceeded");
+					} else if (executionStatus === "run time error") {
+						await sendCallback(callbackUrl, submissionId, "Runtime Error");
+					}
+				}
 				continue;
 			}
 
@@ -181,14 +189,10 @@ export const batchTaskQueueProcessor: BatchTaskQueueProcessorFunction = async ()
 			await redisClient.set(`batchResult:${id}`, JSON.stringify(parsedBatchResult));
 
 			if (callbackUrl) {
-				await sendCallback(callbackUrl, submissionId, allTasksAccepted);
+				await sendCallback(callbackUrl, submissionId, allTasksAccepted ? "Accepted" : "Rejected");
 			}
 		} catch (error) {
 			console.error("Error processing batch task:", error);
-
-			if (callbackUrl) {
-				await sendCallback(callbackUrl, submissionId, false);
-			}
 		}
 	}
 };
@@ -264,9 +268,9 @@ async function execWithTimeout(
 	});
 }
 
-const sendCallback = async (callbackUrl: string, submissionId: string, accepted: boolean) => {
+const sendCallback = async (callbackUrl: string, submissionId: string, status: string) => {
 	try {
-		await axios.post(callbackUrl, { submissionId, accepted });
+		await axios.post(callbackUrl, { submissionId, status });
 	} catch (error) {
 		console.error("Error sending callback:", error);
 	}
