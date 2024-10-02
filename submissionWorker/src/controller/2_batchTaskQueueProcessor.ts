@@ -158,7 +158,7 @@ export const batchTaskQueueProcessor: BatchTaskQueueProcessorFunction = async ()
 			const { containerId, compileStatus, compilationError } = await compileInContainer(languageId, code);
 			if (compileStatus === "compilation error") {
 				await updateBatchResult(id, "compilation error", [], compilationError);
-				if (callbackUrl) await sendCallback(callbackUrl, submissionId, "Compilation Error");
+				if (callbackUrl) await sendCallback(callbackUrl, submissionId, "CompilationError");
 				continue;
 			}
 
@@ -174,9 +174,9 @@ export const batchTaskQueueProcessor: BatchTaskQueueProcessorFunction = async ()
 				await updateBatchResult(id, executionStatus);
 				if (callbackUrl) {
 					if (executionStatus === "time limit exceeded") {
-						await sendCallback(callbackUrl, submissionId, "Time Limit Exceeded");
+						await sendCallback(callbackUrl, submissionId, "TimeLimitExceeded");
 					} else if (executionStatus === "run time error") {
-						await sendCallback(callbackUrl, submissionId, "Runtime Error");
+						await sendCallback(callbackUrl, submissionId, "RunTimeError");
 					}
 				}
 				continue;
