@@ -84,7 +84,7 @@ const executeCompiledCode: ExecuteCompiledCode = async (id, languageId, containe
 		throw new Error(`No execute command defined for language ID ${languageId}`);
 	}
 
-	const chunkSize = 4;
+	const chunkSize = 2;
 	let allTasksAccepted = true;
 	let batchResult: BatchResult = { status: "executing", tasks: [] }; // Initialize batchResult here
 
