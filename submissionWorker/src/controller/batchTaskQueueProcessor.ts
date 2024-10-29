@@ -172,25 +172,27 @@ export const batchTaskQueueProcessor: BatchTaskQueueProcessorFunction = async ()
 		await updateBatchResult(id, "executing");
 		
 		try {
-			// step 4: fetch test caes from s3
-			const unparsedTestCases = await fetch(testCaseURL, {
-				method: "GET",
-			});
-			const testCases: TestCaseType[] = await unparsedTestCases.json();
+			// step 4: fetch test cases and compile code in parallel
+			const [testCasesResponse, compilationResult] = await Promise.all([
+				fetch(testCaseURL, { method: "GET" }),
+				compileInContainer(languageId, code)
+			]);
+
+			const testCases: TestCaseType[] = await testCasesResponse.json();
+			const { containerId, compileStatus, compilationError } = compilationResult;
+
+			if (compileStatus === "compilation error") {
+				await updateBatchResult(id, "compilation error", [], compilationError);
+				if (callbackUrl) await sendCallback(callbackUrl, submissionId, "CompilationError");
+				continue;
+			}
+
 			const tasks = testCases.map((testCase, index) => ({
 				id: index,
 				stdin: stdinGenerator(JSON.parse(functionStructure) as FunctionStructureType, testCase),
 				expectedOutput: stdoGenerator(JSON.parse(functionStructure) as FunctionStructureType, testCase),
 				inputs: JSON.stringify(testCase.input),
 			}));
-
-			// step 5: compile the code once in container
-			const { containerId, compileStatus, compilationError } = await compileInContainer(languageId, code);
-			if (compileStatus === "compilation error") {
-				await updateBatchResult(id, "compilation error", [], compilationError);
-				if (callbackUrl) await sendCallback(callbackUrl, submissionId, "CompilationError");
-				continue;
-			}
 
 			// step 6: execute all test cases
 			const start = Date.now();
