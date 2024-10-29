@@ -1,14 +1,5 @@
 import zod from "zod";
 
-export const taskSchema = zod.object({
-	id: zod.string(),
-	languageId: zod.number(),
-	code: zod.string(),
-	input: zod.string().optional(),
-	expectedOutput: zod.string().optional(),
-	callbackUrl: zod.string().optional(),
-});
-
 export const batchTaskSchema = zod.object({
 	id: zod.number(),
 	stdin: zod.string(),
@@ -22,9 +13,11 @@ export const BatchSubmissionSchema = zod.object({
 	submissionId: zod.string(),
 	code: zod.string().base64(),
 	callbackUrl: zod.string().optional(),
-	tasks: zod.array(batchTaskSchema),
+	functionStructure: zod.string(),
+	testCaseURL: zod.string(),
 });
-export type BatchSubmissionSchema = zod.infer<typeof BatchSubmissionSchema>;
+
+export type BatchSubmissionSchemaType = zod.infer<typeof BatchSubmissionSchema>;
 
 export type BatchResult = {
 	status: string;

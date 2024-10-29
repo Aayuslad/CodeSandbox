@@ -9,6 +9,9 @@ import {
 	InitializeContainersFunction,
 } from "../types/controllerFunctionTypes";
 import { BatchResult, BatchSubmissionSchema } from "../types/zodSchemas";
+import { FunctionStructureType, TestCaseType } from "@aayushlad/code-champ-common";
+import { stdinGenerator } from "../utils/stdinGenerator";
+import { stdoGenerator } from "../utils/stdoutGenerator";
 
 const containerPool: Record<number, string> = {
 	1: "", // Python
@@ -19,6 +22,7 @@ const containerPool: Record<number, string> = {
 
 const initializeContainers: InitializeContainersFunction = async () => {
 	try {
+		// step 1: set all the details of container
 		const containerConfigs = [
 			{ id: 1, image: "python:3.9-alpine", installCommand: "apk add bash" },
 			{ id: 2, image: "gcc:latest", installCommand: "apt-get update && apt-get install -y time" },
@@ -26,11 +30,14 @@ const initializeContainers: InitializeContainersFunction = async () => {
 			{ id: 4, image: "gcc:latest", installCommand: "apt-get update && apt-get install -y time" },
 		];
 
+		// step 3: prepare all containers
 		await Promise.all(
 			containerConfigs.map(async (config) => {
+				// step 3: create docker container
 				const { stdout: containerId } = await execPromise(`docker run -d ${config.image} tail -f /dev/null`);
 				const trimmedContainerId = containerId.trim();
 
+				// step 4: install time module in container
 				await execPromise(`docker exec -i ${trimmedContainerId} /bin/sh -c "${config.installCommand}"`);
 
 				containerPool[config.id] = trimmedContainerId;
@@ -45,6 +52,7 @@ const initializeContainers: InitializeContainersFunction = async () => {
 };
 
 const compileInContainer: CompileInContainerFunction = async (languageId, code) => {
+	// step 1: get the container id and prepare command for compilation
 	const containerId = containerPool[languageId];
 	if (!containerId) throw new Error(`No container found for language ID ${languageId}`);
 
@@ -59,6 +67,7 @@ const compileInContainer: CompileInContainerFunction = async (languageId, code) 
 	if (!compileCommand) throw new Error(`No compile command defined for language ID ${languageId}`);
 
 	try {
+		// step 2: compile
 		const start = Date.now();
 		await execPromise(compileCommand);
 		const end = Date.now();
@@ -72,6 +81,7 @@ const compileInContainer: CompileInContainerFunction = async (languageId, code) 
 };
 
 const executeCompiledCode: ExecuteCompiledCode = async (id, languageId, containerId, inputs, tasks) => {
+	// step 1: prepare execution command
 	const executeCommands: Record<number, string[]> = {
 		1: ["exec", "-i", containerId, "bash", "-c", `TIMEFORMAT='%3R'; time python myapp`], // Python
 		2: ["exec", "-i", containerId, "bash", "-c", `TIMEFORMAT='%3R'; time ./myapp`], // Compiled C/C++
@@ -84,107 +94,117 @@ const executeCompiledCode: ExecuteCompiledCode = async (id, languageId, containe
 		throw new Error(`No execute command defined for language ID ${languageId}`);
 	}
 
-	const chunkSize = 2;
 	let allTasksAccepted = true;
-	let batchResult: BatchResult = { status: "executing", tasks: [] }; // Initialize batchResult here
 
-	// Process inputs in pairs (chunks of size 2)
-	for (let index = 0; index < inputs.length; index += chunkSize) {
-		const inputPairs = inputs.slice(index, index + chunkSize);
-		const taskPairs = tasks.slice(index, index + chunkSize);
+	// step 2: loop all test cases and execute them one by one
+	for (let index = 0; index < inputs.length; index++) {
+		const input = inputs[index];
+		const existingResult = await redisClient.get(`batchResult:${id}`);
+		let batchResult: BatchResult = existingResult ? JSON.parse(existingResult) : { status: "executing", tasks: [] };
 
-		// Prepare execution promises for the current pair
-		const executionPromises = inputPairs.map(async (input, i) => {
-			const taskIndex = index + i; // Get the correct task index
-			const existingResult = await redisClient.get(`batchResult:${id}`);
-			batchResult = existingResult ? JSON.parse(existingResult) : { status: "executing", tasks: [] };
+		try {
+			// step 3: execute task with its stdin
+			const start = Date.now();
+			const { stdout, stderr, executionTime } = await execWithTimeout(command, input, containerId, languageId);
+			const end = Date.now();
+			console.log("code Execution time:", executionTime + "s");
+			console.log("total Execution time:", end - start + "ms");
 
-			try {
-				const start = Date.now();
-				const { stdout, stderr, executionTime } = await execWithTimeout(command, input, containerId, languageId);
-				const end = Date.now();
-				console.log("code Execution time:", executionTime + "s");
-				console.log("total Execution time:", end - start + "ms");
+			// step 4: update output or error in redis
+			const taskResult = {
+				id: tasks[index].id,
+				status: stderr == "" ? "success" : "error",
+				output: stderr == "" ? stdout.trim() : "run time error",
+				accepted: stderr == "" && stdout.trim() === tasks[index].expectedOutput,
+				inputs: tasks[index].inputs || "",
+				expectedOutput: tasks[index].expectedOutput,
+				executionTime: Math.floor(executionTime * 1000),
+			};
 
-				const taskResult = {
-					id: taskPairs[i].id,
-					status: stderr === "" ? "success" : "error",
-					output: stderr === "" ? stdout.trim() : "runtime error",
-					accepted: stderr === "" && stdout.trim() === taskPairs[i].expectedOutput,
-					inputs: taskPairs[i].inputs || "",
-					expectedOutput: taskPairs[i].expectedOutput,
-					executionTime: Math.floor(executionTime * 1000),
-				};
+			batchResult.tasks.push(taskResult);
+			await redisClient.set(`batchResult:${id}`, JSON.stringify(batchResult));
 
-				batchResult.tasks.push(taskResult);
-
-				if (!taskResult.accepted) {
-					allTasksAccepted = false;
-				}
-			} catch (error) {
-				console.error("Runtime error:", error);
-				//@ts-ignore
-				if (error.message === "time limit exceeded") {
-					const taskResult = {
-						id: taskPairs[i].id,
-						status: "error",
-						output: "",
-						accepted: false,
-						inputs: taskPairs[i].inputs || "",
-						expectedOutput: taskPairs[i].expectedOutput,
-					};
-					batchResult.tasks.push(taskResult);
-					allTasksAccepted = false; // Mark as not accepted due to time limit
-				} else {
-					allTasksAccepted = false; // Mark as not accepted due to runtime error
-				}
+			if (!taskResult.accepted) {
+				allTasksAccepted = false;
+				break;
 			}
-		});
+		} catch (error) {
+			// step 5: manage any kind of error
+			console.error("Runtime error:", error);
+			//@ts-ignore
+			if (error.message === "time limit exceeded") {
+				const taskResult = {
+					id: tasks[index].id,
+					status: "error",
+					output: "",
+					accepted: false,
+					inputs: tasks[index].inputs || "",
+					expectedOutput: tasks[index].expectedOutput,
+				};
+				batchResult.tasks.push(taskResult);
+				await redisClient.set(`batchResult:${id}`, JSON.stringify(batchResult));
+				return { allTasksAccepted: false, executionStatus: "time limit exceeded" };
+			}
 
-		// Wait for all tasks in the current pair to complete
-		await Promise.all(executionPromises);
-
-		// Update Redis with the batch results after processing the pair
-		await redisClient.set(`batchResult:${id}`, JSON.stringify(batchResult));
+			return { allTasksAccepted: false, executionStatus: "run time error" };
+		}
 	}
 
 	return { allTasksAccepted, executionStatus: "completed" };
 };
 
 export const batchTaskQueueProcessor: BatchTaskQueueProcessorFunction = async () => {
+	// step 1: initialize the container pool with all compilers
 	await initializeContainers();
 
+	// step 2: define an infinite loop that continuosly poping queue and executing batch task
 	while (redisClient.isOpen) {
+		// step 3: pop the batch task
 		const batchTask = await redisClient.blPop("batch-task-execution-queue", 0);
 		if (!batchTask) continue;
 
 		const parsedBatchTask = BatchSubmissionSchema.safeParse(JSON.parse(batchTask.element));
 		if (!parsedBatchTask.success) continue;
 
-		const { id, submissionId, languageId, callbackUrl, code, tasks } = parsedBatchTask.data;
+		const { id, submissionId, languageId, callbackUrl, code, testCaseURL, functionStructure } = parsedBatchTask.data;
 		console.log("Batch task received:", id);
 
+		await updateBatchResult(id, "executing");
+		
 		try {
-			await updateBatchResult(id, "executing");
+			// step 4: fetch test caes from s3
+			const unparsedTestCases = await fetch(testCaseURL, {
+				method: "GET",
+			});
+			const testCases: TestCaseType[] = await unparsedTestCases.json();
+			const tasks = testCases.map((testCase, index) => ({
+				id: index,
+				stdin: stdinGenerator(JSON.parse(functionStructure) as FunctionStructureType, testCase),
+				expectedOutput: stdoGenerator(JSON.parse(functionStructure) as FunctionStructureType, testCase),
+				inputs: JSON.stringify(testCase.input),
+			}));
 
+			// step 5: compile the code once in container
 			const { containerId, compileStatus, compilationError } = await compileInContainer(languageId, code);
 			if (compileStatus === "compilation error") {
 				await updateBatchResult(id, "compilation error", [], compilationError);
 				if (callbackUrl) await sendCallback(callbackUrl, submissionId, "CompilationError");
 				continue;
 			}
-			
-			const start = Date.now();	
+
+			// step 6: execute all test cases
+			const start = Date.now();
 			const { allTasksAccepted, executionStatus } = await executeCompiledCode(
 				id,
 				languageId,
 				containerId,
-				tasks.map((task) => task.stdin),
+				tasks?.map((task) => task.stdin),
 				tasks,
 			);
 			const end = Date.now();
 			console.log("time to execute all tasks:", (end - start) / 1000 + "s");
 
+			// step 7: update final state of batchTask in redis
 			if (executionStatus !== "completed") {
 				await updateBatchResult(id, executionStatus);
 				if (callbackUrl) {
@@ -203,6 +223,7 @@ export const batchTaskQueueProcessor: BatchTaskQueueProcessorFunction = async ()
 			parsedBatchResult.status = allTasksAccepted ? "accepted" : "rejected";
 			await redisClient.set(`batchResult:${id}`, JSON.stringify(parsedBatchResult));
 
+			// step 8: send final callback to webhook handler
 			if (callbackUrl) {
 				await sendCallback(callbackUrl, submissionId, allTasksAccepted ? "Accepted" : "Rejected");
 			}
@@ -224,7 +245,7 @@ async function execWithTimeout(
 	timeout = 1500,
 ): Promise<{ stdout: string; stderr: string; executionTime: number }> {
 	return new Promise((resolve, reject) => {
-		// Spawn the Docker exec command with /usr/bin/time to measure execution time
+		// step 1: Spawn the Docker exec command with /usr/bin/time to measure execution time
 		const childProcess = spawn("docker", commandArgs, { shell: false });
 
 		let stdout = "";
@@ -235,7 +256,7 @@ async function execWithTimeout(
 		childProcess.stdin.write(input);
 		childProcess.stdin.end(); // Close stdin when done
 
-		// Capture stdout and stderr data
+		// step 2: Capture stdout and stderr data
 		childProcess.stdout.on("data", (data) => {
 			stdout += data.toString();
 		});
@@ -244,7 +265,7 @@ async function execWithTimeout(
 			stderr += data.toString();
 		});
 
-		// On process close, resolve or reject based on the exit code
+		// step 3: On process close, resolve or reject based on the exit code
 		childProcess.on("close", (code) => {
 			if (timedOut) return;
 			clearTimeout(timer);
@@ -264,7 +285,7 @@ async function execWithTimeout(
 			}
 		});
 
-		// Set a timeout to kill the process if it runs longer than the specified time
+		// step 4: Set a timeout to kill the process if it runs longer than the specified time
 		const timer = setTimeout(() => {
 			timedOut = true;
 			const killProcess = spawn(`docker exec ${containerId} pkill -f ${languageId === 3 ? "java" : "myapp"}`, {
