@@ -11,7 +11,7 @@ import {
 import { BatchResult, BatchSubmissionSchema } from "../types/zodSchemas";
 import { FunctionStructureType, TestCaseType } from "@aayushlad/code-champ-common";
 import { stdinGenerator } from "../utils/stdinGenerator";
-import { stdoGenerator } from "../utils/stdoutGenerator";
+import { stdoutGenerator } from "../utils/stdoutGenerator";
 
 const containerPool: Record<number, string> = {
 	1: "", // Python
@@ -186,14 +186,14 @@ export const batchTaskQueueProcessor: BatchTaskQueueProcessorFunction = async ()
 				if (callbackUrl) await sendCallback(callbackUrl, submissionId, "CompilationError");
 				continue;
 			}
-
+			
 			const tasks = testCases.map((testCase, index) => ({
 				id: index,
 				stdin: stdinGenerator(JSON.parse(functionStructure) as FunctionStructureType, testCase),
-				expectedOutput: stdoGenerator(JSON.parse(functionStructure) as FunctionStructureType, testCase),
+				expectedOutput: stdoutGenerator(JSON.parse(functionStructure) as FunctionStructureType, testCase),
 				inputs: JSON.stringify(testCase.input),
 			}));
-
+			
 			// step 6: execute all test cases
 			const start = Date.now();
 			const { allTasksAccepted, executionStatus } = await executeCompiledCode(
