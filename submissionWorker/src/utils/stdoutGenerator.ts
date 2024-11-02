@@ -10,7 +10,7 @@ export const stdoutGenerator = (functionStructure: FunctionStructureType, testCa
 				const values = stdout.split(",").map((item) => item.trim());
 				stdout = `${values.join(" ")}`;
 			} else {
-				stdout = "0";
+				stdout = "";
 			}
 		}
 	} else {
