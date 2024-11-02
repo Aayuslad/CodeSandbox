@@ -172,13 +172,12 @@ export const batchTaskQueueProcessor: BatchTaskQueueProcessorFunction = async ()
 		await updateBatchResult(id, "executing");
 		
 		try {
-			// step 4: fetch test cases and compile code in parallel
-			const [testCasesResponse, compilationResult] = await Promise.all([
-				fetch(testCaseURL, { method: "GET" }),
-				compileInContainer(languageId, code)
-			]);
-
+			// step 4: fetch test cases
+			const testCasesResponse = await fetch(testCaseURL, { method: "GET" });
 			const testCases: TestCaseType[] = await testCasesResponse.json();
+
+			// step 5: compile the code
+			const compilationResult = await compileInContainer(languageId, code);
 			const { containerId, compileStatus, compilationError } = compilationResult;
 
 			if (compileStatus === "compilation error") {
