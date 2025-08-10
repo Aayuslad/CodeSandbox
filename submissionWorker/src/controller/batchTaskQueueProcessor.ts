@@ -209,27 +209,27 @@ export const batchTaskQueueProcessor: BatchTaskQueueProcessorFunction = async ()
 			console.log("time to execute all tasks:", (end - start) / 1000 + "s");
 
 			// step 7: update final state of batchTask in redis
+			const batchResult = await redisClient.get(`batchResult:${id}`);
+			const parsedBatchResult: BatchResult = JSON.parse(batchResult as string);
+
 			if (executionStatus !== "completed") {
 				await updateBatchResult(id, executionStatus);
 				if (callbackUrl) {
 					if (executionStatus === "time limit exceeded") {
-						await sendCallback(callbackUrl, submissionId, "TimeLimitExceeded");
+						await sendCallback(callbackUrl, submissionId, "TimeLimitExceeded", parsedBatchResult.passedTestCases);
 					} else if (executionStatus === "run time error") {
-						await sendCallback(callbackUrl, submissionId, "RunTimeError");
+						await sendCallback(callbackUrl, submissionId, "RunTimeError", parsedBatchResult.passedTestCases);
 					}
 				}
 				continue;
 			}
-
-			const batchResult = await redisClient.get(`batchResult:${id}`);
-			const parsedBatchResult: BatchResult = JSON.parse(batchResult as string);
 
 			parsedBatchResult.status = allTasksAccepted ? "accepted" : "rejected";
 			await redisClient.set(`batchResult:${id}`, JSON.stringify(parsedBatchResult));
 
 			// step 8: send final callback to webhook handler
 			if (callbackUrl) {
-				await sendCallback(callbackUrl, submissionId, allTasksAccepted ? "Accepted" : "Rejected");
+				await sendCallback(callbackUrl, submissionId, allTasksAccepted ? "Accepted" : "Rejected", parsedBatchResult.passedTestCases);
 			}
 		} catch (error) {
 			console.error("Error processing batch task:", error);
@@ -308,9 +308,9 @@ async function execWithTimeout(
 	});
 }
 
-const sendCallback = async (callbackUrl: string, submissionId: string, status: string) => {
+const sendCallback = async (callbackUrl: string, submissionId: string, status: string, passedTestCases: number = 0) => {
 	try {
-		await axios.post(callbackUrl, { submissionId, status });
+		await axios.post(callbackUrl, { submissionId, status, passedTestCases });
 	} catch (error) {
 		console.error("Error sending callback:", error);
 	}
