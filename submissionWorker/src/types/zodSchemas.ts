@@ -21,6 +21,7 @@ export type BatchSubmissionSchemaType = zod.infer<typeof BatchSubmissionSchema>;
 
 export type BatchResult = {
 	status: string;
+	compilationError?: string;
 	tasks: Array<{
 		id: number;
 		status: string;

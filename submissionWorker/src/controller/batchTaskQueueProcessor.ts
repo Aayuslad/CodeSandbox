@@ -317,18 +317,27 @@ const sendCallback = async (callbackUrl: string, submissionId: string, status: s
 };
 
 const updateBatchResult = async (id: string, status: string, tasks: any[] = [], compilationError: string = ""): Promise<void> => {
-	const key = `batchResult:${id}`;
-	const result = { status, tasks, compilationError };
+    const key = `batchResult:${id}`;
+    let existingData: BatchResult | null = null;
+    
+    try {
+        const batchResult = await redisClient.get(key);
+        if (batchResult) {
+            existingData = JSON.parse(batchResult) as BatchResult;
+        }
 
-	if (tasks.length === 0) {
-		const existingResult = await redisClient.get(key);
-		if (existingResult) {
-			const parsedResult = JSON.parse(existingResult);
-			result.tasks = parsedResult.tasks || [];
-		}
-	}
+        const result: BatchResult = {
+            status,
+            tasks: tasks.length > 0 ? tasks : (existingData?.tasks || []),
+            compilationError,
+            passedTestCases: existingData?.passedTestCases || 0
+        };
 
-	await redisClient.set(key, JSON.stringify(result));
+        await redisClient.set(key, JSON.stringify(result));
+    } catch (error) {
+        console.error(`Error updating batch result for id ${id}:`, error);
+        throw error; // or handle error based on your requirements
+    }
 };
 
 const extractError = (log: string) => {
