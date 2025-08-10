@@ -100,7 +100,7 @@ const executeCompiledCode: ExecuteCompiledCode = async (id, languageId, containe
 	for (let index = 0; index < inputs.length; index++) {
 		const input = inputs[index];
 		const existingResult = await redisClient.get(`batchResult:${id}`);
-		let batchResult: BatchResult = existingResult ? JSON.parse(existingResult) : { status: "executing", tasks: [] };
+		let batchResult: BatchResult = existingResult ? JSON.parse(existingResult) : { status: "executing", tasks: [], passedTestCases: 0 };
 
 		try {
 			// step 3: execute task with its stdin
@@ -122,6 +122,9 @@ const executeCompiledCode: ExecuteCompiledCode = async (id, languageId, containe
 			};
 
 			batchResult.tasks.push(taskResult);
+			if (taskResult.accepted) {
+				batchResult.passedTestCases += 1;
+			}
 			await redisClient.set(`batchResult:${id}`, JSON.stringify(batchResult));
 
 			if (!taskResult.accepted) {

@@ -29,4 +29,5 @@ export type BatchResult = {
 		inputs: string;
 		expectedOutput: string | undefined;
 	}>;
+	passedTestCases: number;
 };
